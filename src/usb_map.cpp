@@ -31,11 +31,42 @@ void print_row(const std::string& vdev, const std::string& pdev, const std::stri
     std::cout << " " << vdev<< "\t\t\t" << pdev  << "\t\t\t" << interfaceId << std::endl;
 }
 
-int main(int argc, char* argv[]) {
-    bool showLinks = true;
-    bool showPhys = true;
+// 遍历符号链接设备
+void print_symlink_devices(struct udev* udev) {
+    for (const auto& entry : fs::directory_iterator("/dev")) {
+        if (!entry.is_symlink()) continue;
+        std::string vdev = entry.path().string();
+        std::string filename = entry.path().filename().string();
+        if (filename.find("tty") != 0) continue;
 
-    // 命令行选项
+        std::error_code ec;
+        fs::path resolved = fs::read_symlink(entry.path(), ec);
+        if (ec) continue;
+        std::string pdev = resolved.is_absolute() ? resolved.string() : (entry.path().parent_path() / resolved).string();
+        std::string pdev_name = fs::path(pdev).filename().string();
+
+        if (pdev_name.find("ttyUSB") == std::string::npos && pdev_name.find("ttyACM") == std::string::npos)
+            continue;
+
+        std::string interfaceId = get_interface_id(udev, pdev);
+        print_row(vdev.substr(5), pdev_name, interfaceId);
+    }
+}
+
+// 遍历物理设备
+void print_phys_devices(struct udev* udev) {
+    for (const std::string& prefix : {"/dev/ttyUSB", "/dev/ttyACM"}) {
+        for (int i = 0; i < 32; i++) {
+            std::string devPath = prefix + std::to_string(i);
+            if (!fs::exists(devPath)) continue;
+
+            std::string interfaceId = get_interface_id(udev, devPath);
+            print_row("-", devPath.substr(5), interfaceId);
+        }
+    }
+}
+
+void parse_command_line_args(int argc, char* argv[], bool& showLinks, bool& showPhys) {
     if (argc > 1) {
         std::string arg = argv[1];
         if (arg == "--links") {
@@ -49,9 +80,16 @@ int main(int argc, char* argv[]) {
             showPhys = true;
         } else {
             std::cerr << "用法: " << argv[0] << " [--links | --phys | --all]" << std::endl;
-            return 1;
+            exit(1);
         }
     }
+}
+
+int main(int argc, char* argv[]) {
+    bool showLinks = true;
+    bool showPhys = true;
+
+    parse_command_line_args(argc, argv, showLinks, showPhys);
 
     udev* udev = udev_new();
     if (!udev) {
@@ -63,48 +101,8 @@ int main(int argc, char* argv[]) {
     std::cout << "--------------------------------------------------------------" << std::endl;
     std::cout << " 虚拟设备" << "\t\t" << "物理设备" << "\t\t" << "接口ID" << std::endl;
 
-    // 遍历符号链接设备
-    if (showLinks) {
-        for (const auto& entry : fs::directory_iterator("/dev")) {
-            if (!entry.is_symlink()) continue;
-            // 获取符号链接设备名称
-            std::string vdev = entry.path().string();
-            // 获取符号链接设备名称（不带 /dev 前缀）
-            std::string filename = entry.path().filename().string();
-            // 跳过非 tty 设备
-            if (filename.find("tty") != 0) continue;
-
-            // 获取符号链接设备对应的物理设备名称
-            std::error_code ec;
-            fs::path resolved = fs::read_symlink(entry.path(), ec);
-            if (ec) continue;
-            
-            // 将解析出的物理设备路径转换为绝对路径：如果resolved已经是绝对路径则直接使用，否则将其与符号链接所在目录组合成完整路径
-            std::string pdev = resolved.is_absolute() ? resolved.string() : (entry.path().parent_path() / resolved).string();
-
-            // 从完整路径中提取设备文件名（去掉目录部分），例如从"/dev/ttyUSB0"提取出"ttyUSB0"
-            std::string pdev_name = fs::path(pdev).filename().string();
-
-            if (pdev_name.find("ttyUSB") == std::string::npos && pdev_name.find("ttyACM") == std::string::npos)
-                continue;
-
-            std::string interfaceId = get_interface_id(udev, pdev);
-            print_row(vdev.substr(5), pdev_name, interfaceId);
-        }
-    }
-
-    // 遍历物理设备
-    if (showPhys) {
-        for (const std::string& prefix : {"/dev/ttyUSB", "/dev/ttyACM"}) {
-            for (int i = 0; i < 32; i++) {
-                std::string devPath = prefix + std::to_string(i);
-                if (!fs::exists(devPath)) continue;
-
-                std::string interfaceId = get_interface_id(udev, devPath);
-                print_row("-", devPath.substr(5), interfaceId);
-            }
-        }
-    }
+    if (showLinks) print_symlink_devices(udev);
+    if (showPhys) print_phys_devices(udev);
 
     udev_unref(udev);
 }
