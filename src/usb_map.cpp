@@ -28,7 +28,9 @@ std::string get_interface_id(struct udev* udev, const std::string& devPath) {
 }
 
 void print_row(const std::string& vdev, const std::string& pdev, const std::string& interfaceId) {
-    std::cout << " " << vdev<< "\t\t\t" << pdev  << "\t\t\t" << interfaceId << std::endl;
+    std::cout << " " << std::left << std::setw(20) << vdev 
+              << std::left << std::setw(20) << pdev 
+              << std::left << std::setw(20) << interfaceId << std::endl;
 }
 
 // 遍历符号链接设备
@@ -99,12 +101,13 @@ int main(int argc, char* argv[]) {
 
     std::cout << "虚拟串口设备映射关系:" << std::endl;
     std::cout << "--------------------------------------------------------------" << std::endl;
-    std::cout << " 虚拟设备" << "\t\t" << "物理设备" << "\t\t" << "接口ID" << std::endl;
+    // 使用固定宽度对齐
+    std::cout << " " << std::left << std::setw(20) << "虚拟设备" 
+              << std::left << std::setw(20) << "   物理设备" 
+              << std::left << std::setw(20) << "        接口ID" << std::endl;
 
     if (showLinks) print_symlink_devices(udev);
     if (showPhys) print_phys_devices(udev);
-
-    udev_unref(udev);
 }
 /*
 g++ -std=c++17 ./src/usb_map.cpp -o ./build/usb_map -ludev -pthread -static-libstdc++ -static-libgcc
