@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -68,7 +69,87 @@ void print_phys_devices(struct udev* udev) {
     }
 }
 
-void parse_command_line_args(int argc, char* argv[], bool& showLinks, bool& showPhys) {
+std::string make_rule(const std::string& virtualName, const std::string& physicalId) {
+    return "KERNEL==\"ttyUSB*\", KERNELS==\"" + physicalId + "\", MODE:=\"0664\", SYMLINK+=\"" + virtualName + "\"";
+}
+
+bool update_rules_file(const std::string& filePath, const std::string& virtualName, const std::string& physicalId) {
+    std::vector<std::string> lines;
+    bool found = false;
+    std::string newRule = make_rule(virtualName, physicalId);
+
+    if (fs::exists(filePath)) {
+        std::ifstream inFile(filePath);
+        if (!inFile.is_open()) {
+            std::cerr << "无法打开文件: " << filePath << std::endl;
+            return false;
+        }
+        std::string line;
+        while (std::getline(inFile, line)) {
+            if (line.find("KERNELS==\"" + physicalId + "\"") != std::string::npos) {
+                lines.push_back(newRule);
+                found = true;
+            } else {
+                lines.push_back(line);
+            }
+        }
+        inFile.close();
+    }
+
+    if (!found) {
+        lines.push_back(newRule);
+    }
+
+    std::ofstream outFile(filePath);
+    if (!outFile.is_open()) {
+        std::cerr << "无法写入文件: " << filePath << std::endl;
+        return false;
+    }
+    for (const auto& l : lines) {
+        outFile << l << "\n";
+    }
+    outFile.close();
+
+    std::cout << (found ? "已更新" : "已添加") << "规则: " << newRule << std::endl;
+    std::cout << "文件: " << filePath << std::endl;
+    return true;
+}
+
+void print_usage(const char* progName) {
+    std::cerr << "用法:" << std::endl;
+    std::cerr << "  " << progName << " [--links | --phys | --all]" << std::endl;
+    std::cerr << "  " << progName << " --add <虚拟名称> <物理ID> [--file <文件名>]" << std::endl;
+    std::cerr << std::endl;
+    std::cerr << "选项:" << std::endl;
+    std::cerr << "  --links              仅显示虚拟设备（符号链接）" << std::endl;
+    std::cerr << "  --phys               仅显示物理设备" << std::endl;
+    std::cerr << "  --all                显示全部（默认）" << std::endl;
+    std::cerr << "  --add                添加 udev 规则" << std::endl;
+    std::cerr << "  --file <文件名>      规则文件名（默认: relia.rules）" << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc > 1 && std::string(argv[1]) == "--add") {
+        if (argc < 4) {
+            print_usage(argv[0]);
+            return 1;
+        }
+        std::string virtualName = argv[2];
+        std::string physicalId = argv[3];
+        std::string fileName = "relia.rules";
+
+        for (int i = 4; i < argc; i++) {
+            if (std::string(argv[i]) == "--file" && i + 1 < argc) {
+                fileName = argv[++i];
+            }
+        }
+
+        return update_rules_file(fileName, virtualName, physicalId) ? 0 : 1;
+    }
+
+    bool showLinks = true;
+    bool showPhys = true;
+
     if (argc > 1) {
         std::string arg = argv[1];
         if (arg == "--links") {
@@ -81,17 +162,10 @@ void parse_command_line_args(int argc, char* argv[], bool& showLinks, bool& show
             showLinks = true;
             showPhys = true;
         } else {
-            std::cerr << "用法: " << argv[0] << " [--links | --phys | --all]" << std::endl;
-            exit(1);
+            print_usage(argv[0]);
+            return 1;
         }
     }
-}
-
-int main(int argc, char* argv[]) {
-    bool showLinks = true;
-    bool showPhys = true;
-
-    parse_command_line_args(argc, argv, showLinks, showPhys);
 
     udev* udev = udev_new();
     if (!udev) {
@@ -108,6 +182,8 @@ int main(int argc, char* argv[]) {
 
     if (showLinks) print_symlink_devices(udev);
     if (showPhys) print_phys_devices(udev);
+
+    udev_unref(udev);
 }
 /*
 g++ -std=c++17 ./src/usb_map.cpp -o ./build/usb_map -ludev -pthread -static-libstdc++ -static-libgcc

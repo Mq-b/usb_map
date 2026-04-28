@@ -15,6 +15,33 @@ Linux 下 USB 串口设备映射查询与 4G 模块检测工具集。
   --all    显示全部（默认）
 ```
 
+生成 udev 规则文件，实现设备名持久化映射：
+
+```
+用法: usb_map --add <虚拟名称> <物理ID> [--file <文件名>]
+  --add    添加或更新 udev 规则
+  --file   规则文件名（默认: relia.rules）
+```
+
+示例：
+
+```bash
+# 查看当前设备映射
+usb_map --phys
+
+# 为物理设备 1-1 创建符号链接 ttyCAN
+usb_map --add ttyCAN 1-1
+
+# 指定规则文件名
+usb_map --add ttyLIS 1-4.5:1.0 --file device.rules
+```
+
+若规则文件中已存在相同物理 ID 的规则，则更新；否则追加。规则格式：
+
+```
+KERNEL=="ttyUSB*", KERNELS=="<物理ID>", MODE:="0664", SYMLINK+="<虚拟名称>"
+```
+
 ![](./images/usb_map-example.png)
 
 ### find_4g_module
