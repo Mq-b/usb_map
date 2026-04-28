@@ -42,6 +42,16 @@ usb_map --add ttyLIS 1-4.5:1.0 --file device.rules
 KERNEL=="ttyUSB*", KERNELS=="<物理ID>", MODE:="0664", SYMLINK+="<虚拟名称>"
 ```
 
+将生成的规则文件复制到 `/etc/udev/rules.d/` 并重载 udev 使其生效：
+
+```bash
+sudo cp relia.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+或直接重启系统：`sudo reboot`
+
 ![](./images/usb_map-example.png)
 
 ### find_4g_module
