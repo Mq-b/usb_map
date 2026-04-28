@@ -125,7 +125,7 @@ void print_usage(const char* progName) {
     std::cerr << "  --phys               仅显示物理设备" << std::endl;
     std::cerr << "  --all                显示全部（默认）" << std::endl;
     std::cerr << "  --add                添加 udev 规则" << std::endl;
-    std::cerr << "  --file <文件名>      规则文件名（默认: relia.rules）" << std::endl;
+    std::cerr << "  --file <文件名>      规则文件名（默认: /etc/udev/rules.d/relia.rules）" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -136,7 +136,7 @@ int main(int argc, char* argv[]) {
         }
         std::string virtualName = argv[2];
         std::string physicalId = argv[3];
-        std::string fileName = "relia.rules";
+        std::string fileName = "/etc/udev/rules.d/relia.rules";
 
         for (int i = 4; i < argc; i++) {
             if (std::string(argv[i]) == "--file" && i + 1 < argc) {
